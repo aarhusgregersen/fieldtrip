@@ -1,0 +1,35 @@
+{
+  "name": "@fieldtrip/core",
+  "version": "0.1.0",
+  "description": "State machines for human input: typed, testable, analyzable multi-step flows.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Martin Aarhus Gregersen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aarhusgregersen/fieldtrip.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/aarhusgregersen/fieldtrip#readme",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "@fieldtrip/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --typecheck",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "zod": "^4.6.5"
+  }
+}
