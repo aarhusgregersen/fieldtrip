@@ -22,7 +22,7 @@ importers:
 
   packages/react:
     dependencies:
-      '@fieldtrip/core':
+      '@fieldtripjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

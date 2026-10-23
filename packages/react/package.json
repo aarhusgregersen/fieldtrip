@@ -1,7 +1,7 @@
 {
-  "name": "@fieldtrip/react",
+  "name": "@fieldtripjs/react",
   "version": "0.1.0",
-  "description": "Headless React bindings for @fieldtrip/core.",
+  "description": "Headless React bindings for @fieldtripjs/core.",
   "type": "module",
   "license": "MIT",
   "author": "Martin Aarhus Gregersen",
@@ -14,7 +14,7 @@
   "sideEffects": false,
   "exports": {
     ".": {
-      "@fieldtrip/source": "./src/index.ts",
+      "@fieldtripjs/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
@@ -32,7 +32,7 @@
     "react": ">=18"
   },
   "dependencies": {
-    "@fieldtrip/core": "workspace:*"
+    "@fieldtripjs/core": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",

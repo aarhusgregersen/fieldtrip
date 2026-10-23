@@ -13,7 +13,7 @@ import {
   start,
   type StepName,
   visibleFields as visibleFieldsOf,
-} from "@fieldtrip/core";
+} from "@fieldtripjs/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export interface UseFlowOptions<FL extends AnyFlow> {

@@ -1,4 +1,4 @@
-import type { AnyFlow } from "@fieldtrip/core";
+import type { AnyFlow } from "@fieldtripjs/core";
 import { createContext, type ReactNode, useContext } from "react";
 import { type FlowController, useFlow, type UseFlowOptions } from "./use-flow.js";
 

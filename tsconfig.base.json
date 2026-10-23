@@ -10,7 +10,7 @@
     "declaration": true,
     "skipLibCheck": true,
     "customConditions": [
-      "@fieldtrip/source"
+      "@fieldtripjs/source"
     ]
   }
 }

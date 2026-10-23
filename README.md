@@ -18,7 +18,7 @@ Nobody can answer "which paths exist?", "can this step ever be reached?", or "wh
 
 ```ts
 import { z } from "zod";
-import { defineFlow } from "@fieldtrip/core";
+import { defineFlow } from "@fieldtripjs/core";
 
 const checkout = defineFlow({
   start: "country",
@@ -70,7 +70,7 @@ company: {
 State is a plain JSON object. Every operation is `(flow, state) → state`, with no UI or framework assumptions.
 
 ```ts
-import { start, setInputs, next, back, result } from "@fieldtrip/core";
+import { start, setInputs, next, back, result } from "@fieldtripjs/core";
 
 let state = start(onboarding);
 state = setInputs(onboarding, state, { name: "Acme", employees: "5" });
@@ -140,7 +140,7 @@ Operators: `equals`, `notEquals`, `contains`, `greaterThan`, `lessThan`, `isChec
 
 ## React
 
-`@fieldtrip/react` is headless: state and navigation, your components.
+`@fieldtripjs/react` is headless: state and navigation, your components.
 
 ```tsx
 const { FlowProvider, useFlowContext } = createFlowContext(checkout);

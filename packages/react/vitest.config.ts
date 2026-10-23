@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  resolve: { conditions: ["@fieldtrip/source"] },
+  resolve: { conditions: ["@fieldtripjs/source"] },
   test: { environment: "jsdom" },
 });

@@ -1,4 +1,4 @@
-import { defineFlow } from "@fieldtrip/core";
+import { defineFlow } from "@fieldtripjs/core";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
