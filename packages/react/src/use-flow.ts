@@ -6,6 +6,7 @@ import {
   type FieldName,
   type FlowState,
   type FlowValues,
+  forecast as forecastOf,
   next as nextState,
   path as pathOf,
   result,
@@ -33,6 +34,7 @@ export interface FlowController<FL extends AnyFlow> {
   readonly state: FlowState<FL>;
   readonly step: StepName<FL>;
   readonly path: readonly StepName<FL>[];
+  readonly forecast: readonly StepName<FL>[];
   readonly values: FlowValues<FL>;
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly issues: FieldIssues;
@@ -103,6 +105,7 @@ export function useFlow<FL extends AnyFlow>(flow: FL, options: UseFlowOptions<FL
 
   const inputs = state.inputs[state.current] ?? {};
   const visibleFields = useMemo(() => visibleFieldsOf(flow, state) as FieldName<FL>[], [flow, state]);
+  const forecast = useMemo(() => forecastOf(flow, state), [flow, state]);
 
   const field = useCallback(
     <N extends FieldName<FL>>(name: N): FieldProps<N> => ({
@@ -120,6 +123,7 @@ export function useFlow<FL extends AnyFlow>(flow: FL, options: UseFlowOptions<FL
       state,
       step: state.current,
       path: pathOf(state),
+      forecast,
       values: result(flow, state),
       inputs,
       issues,
@@ -133,6 +137,6 @@ export function useFlow<FL extends AnyFlow>(flow: FL, options: UseFlowOptions<FL
       back,
       reset,
     }),
-    [flow, state, inputs, issues, visibleFields, isPending, setInput, field, next, back, reset],
+    [flow, state, forecast, inputs, issues, visibleFields, isPending, setInput, field, next, back, reset],
   );
 }

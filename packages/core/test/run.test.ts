@@ -57,3 +57,17 @@ describe("conditions on earlier steps", () => {
     expect(se.path).toEqual(["country", "type", "done"]);
   });
 });
+
+describe("answers that don't match the flow", () => {
+  it("rejects unknown steps", async () => {
+    const answers: Record<string, Record<string, unknown>> = { compnay: { name: "Acme" } };
+
+    await expect(run(onboarding, answers)).rejects.toThrow('unknown step "compnay"');
+  });
+
+  it("rejects unknown fields", async () => {
+    await expect(run(onboarding, { company: { nmae: "Acme" } as never })).rejects.toThrow(
+      'unknown field "company.nmae"',
+    );
+  });
+});

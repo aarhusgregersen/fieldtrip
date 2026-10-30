@@ -46,6 +46,11 @@ export interface Transition<V = any, A = any, T extends string = string> {
 
 export type FieldVisibility<V = any, A = any> = (values: Partial<V>, all: A) => boolean;
 
+export type StepIssues<F = any> = { readonly [K in keyof FieldsOf<F>]?: readonly string[] };
+
+// Runs after every visible field parsed, so checks can span fields and depend on earlier steps.
+export type StepValidator<V = any, A = any, F = any> = (values: V, all: A) => StepIssues<F> | undefined;
+
 export interface StepConfig<F, S extends FlowShape> {
   readonly fields?: F & Fields;
   // A hidden step is skipped, following its unconditional transition.
@@ -54,6 +59,7 @@ export interface StepConfig<F, S extends FlowShape> {
   readonly fieldsVisibleWhen?: [ConditionalKeys<F>] extends [never]
     ? Readonly<Record<string, never>>
     : { readonly [K in ConditionalKeys<F>]: FieldVisibility<NoInfer<FieldValues<F>>, NoInfer<ValuesOf<S>>> };
+  readonly validate?: StepValidator<NoInfer<FieldValues<F>>, NoInfer<ValuesOf<S>>, NoInfer<F>>;
   readonly next?:
     | NoInfer<keyof S & string>
     | readonly Transition<NoInfer<FieldValues<F>>, NoInfer<ValuesOf<S>>, NoInfer<keyof S & string>>[];
@@ -72,6 +78,7 @@ export interface Step {
   readonly targets: readonly string[];
   readonly visibleWhen?: ((all: any) => boolean) | undefined;
   readonly fieldsVisibleWhen: Readonly<Record<string, FieldVisibility>>;
+  readonly validate?: StepValidator | undefined;
 }
 
 export interface StepParts {
@@ -79,6 +86,7 @@ export interface StepParts {
   readonly transitions?: readonly Transition[] | undefined;
   readonly visibleWhen?: ((all: any) => boolean) | undefined;
   readonly fieldsVisibleWhen?: Readonly<Record<string, FieldVisibility>> | undefined;
+  readonly validate?: StepValidator | undefined;
 }
 
 export interface Flow<S extends FlowShape = FlowShape> {
@@ -102,6 +110,7 @@ export function defineFlow<const S extends FlowShape>(config: FlowConfig<S>): Fl
           transitions,
           visibleWhen: s.visibleWhen,
           fieldsVisibleWhen: s.fieldsVisibleWhen as Record<string, FieldVisibility> | undefined,
+          validate: s.validate,
         }),
       ];
     }),
@@ -117,6 +126,7 @@ export function compileStep(parts: StepParts): Step {
     targets: [...new Set(transitions.map((t) => t.to))],
     visibleWhen: parts.visibleWhen,
     fieldsVisibleWhen: parts.fieldsVisibleWhen ?? {},
+    validate: parts.validate,
   };
 }
 

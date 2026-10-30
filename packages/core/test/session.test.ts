@@ -70,3 +70,24 @@ describe("session", () => {
     expect(() => restore(onboarding, { status: "active", current: "nope", history: [] })).toThrow(FlowStateError);
   });
 });
+
+describe("inputs for other steps", () => {
+  it("prefills a later step without touching the current one", async () => {
+    let state = setInputs(onboarding, start(onboarding), { storeUrl: "https://acme.shop" }, "shopify");
+    expect(state.current).toBe("company");
+
+    state = await advance(state, { name: "Acme", employees: 5 });
+    state = await advance(state, { useCase: "ecommerce" });
+    const outcome = await next(onboarding, state);
+
+    expect(outcome.ok && result(onboarding, outcome.state).shopify).toEqual({ storeUrl: "https://acme.shop" });
+  });
+
+  it("leaves an earlier step's result alone until it is submitted again", async () => {
+    let state = await advance(start(onboarding), { name: "Acme", employees: 5 });
+    state = setInputs(onboarding, state, { name: "Other" }, "company");
+
+    expect(state.inputs.company).toEqual({ name: "Other", employees: 5 });
+    expect(state.values.company).toEqual({ name: "Acme", employees: 5 });
+  });
+});

@@ -62,6 +62,14 @@ describe("useFlow", () => {
     expect(resumed.result.current.path).toEqual(["company", "sales"]);
   });
 
+  it("forecasts the expected route while the user types", () => {
+    const { result } = renderHook(() => useFlow(flow));
+    expect(result.current.forecast).toEqual(["company", "done"]);
+
+    act(() => result.current.setInput("employees", "50"));
+    expect(result.current.forecast).toEqual(["company", "sales", "done"]);
+  });
+
   it("completes on a terminal step", async () => {
     const { result } = renderHook(() => useFlow(flow));
 

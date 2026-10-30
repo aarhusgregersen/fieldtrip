@@ -15,6 +15,8 @@ export {
   type FlowValues,
   type Step,
   type StepConfig,
+  type StepIssues,
+  type StepValidator,
   type StepInputs,
   type StepName,
   type StepValues,
@@ -23,15 +25,19 @@ export {
 } from "./define.js";
 export {
   back,
+  forecast,
   next,
+  nextSync,
   path,
   restore,
   result,
   setInputs,
   start,
   validateStep,
+  validateStepSync,
   draftValues,
   visibleFields,
+  FlowAsyncError,
   FlowStateError,
   FlowStuckError,
   type AnyStepInputs,
@@ -40,7 +46,7 @@ export {
   type NextResult,
 } from "./session.js";
 export { analyze, edges, paths, terminals, type Diagnostic, type Edge } from "./analyze.js";
-export { run, type Answers, type RunResult } from "./run.js";
+export { run, runSync, type Answers, type RunResult } from "./run.js";
 export type { StandardSchemaV1 } from "./standard-schema.js";
 export {
   fromDefinition,
