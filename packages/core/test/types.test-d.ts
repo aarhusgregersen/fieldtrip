@@ -134,3 +134,38 @@ describe("mixed conditional and plain fields", () => {
     });
   });
 });
+
+describe("types of step validation and targeted inputs", () => {
+  it("types validate against the step and the flow, and issues against the step's fields", () => {
+    defineFlow({
+      start: "a",
+      steps: {
+        a: { fields: { kind: z.enum(["x", "y"]) }, next: "b" },
+        b: {
+          fields: { n: z.number() },
+          validate: (v, all) => {
+            expectTypeOf(v).toEqualTypeOf<{ n: number }>();
+            expectTypeOf(all.a).toEqualTypeOf<{ kind: "x" | "y" } | undefined>();
+            return { n: ["too big"] };
+          },
+        },
+      },
+    });
+
+    defineFlow({
+      start: "a",
+      steps: {
+        // @ts-expect-error a has no field "m"
+        a: { fields: { n: z.number() }, validate: () => ({ m: ["nope"] }) },
+      },
+    });
+  });
+
+  it("types inputs against the targeted step", () => {
+    setInputs(onboarding, start(onboarding), { storeUrl: "https://acme.shop" }, "shopify");
+    // @ts-expect-error storeUrl belongs to shopify, not company
+    setInputs(onboarding, start(onboarding), { storeUrl: "https://acme.shop" }, "company");
+    // @ts-expect-error "shopfy" is not a step
+    setInputs(onboarding, start(onboarding), {}, "shopfy");
+  });
+});

@@ -65,6 +65,21 @@ company: {
 - Field visibility reacts while the user types: it sees the step's values as far as they currently parse.
 - A hidden step is skipped by following its unconditional transition. It never enters history, so `back()` skips it too.
 
+## Rules across fields and steps
+
+A field's schema is fixed, so it can't depend on an earlier answer. `validate` runs once every visible field parses, sees the step's values and every earlier step, and returns issues per field:
+
+```ts
+frequency: {
+  fields: { every: z.enum(["week", "month", "daily"]) },
+  validate: (v, all) =>
+    v.every === "daily" && all.audience?.kind !== "business" ? { every: ["Only for businesses"] } : undefined,
+  next: "done",
+},
+```
+
+This keeps one step shared between branches instead of a copy per branch.
+
 ## Running a flow
 
 State is a plain JSON object. Every operation is `(flow, state) → state`, with no UI or framework assumptions.
@@ -82,6 +97,21 @@ if (!outcome.ok) outcome.issues; // { employees: ["..."] }
 - `back()` follows the branch actually taken. Inputs are kept, so going back and forth never loses what the user typed.
 - `result()` only contains values from steps on the current path — answers from an abandoned branch never leak into the submission.
 - `JSON.stringify(state)` / `restore(flow, json)` to resume later.
+- `setInputs(flow, state, inputs, "shipping")` writes to another step, e.g. to prefill it from a lookup. Writing to an earlier step only changes its inputs: the result changes once the user goes back and submits it again.
+
+### Synchronous
+
+`next`, `validateStep` and `run` are async because a schema may be. When all of a flow's schemas are synchronous, `nextSync`, `validateStepSync` and `runSync` do the same without a promise, for render and `useState` initializers. They throw `FlowAsyncError` on an async schema.
+
+### Expected route
+
+`path(state)` is where the user has been. `forecast(flow, state)` adds where they are expected to go — for a progress bar or "step 3 of 7":
+
+```ts
+forecast(onboarding, state); // ["company", "useCase", "invite", "done"]
+```
+
+It moves forward from the current step using inputs that already parse (including inputs kept on later steps after going back), and takes the unconditional transition where a step isn't answered yet. Hidden steps are skipped against what is known so far. It is synchronous; async fields count as unanswered. It stops early where every transition is conditional and the step is unanswered.
 
 ## Testing without a browser
 
@@ -95,6 +125,10 @@ const outcome = await run(onboarding, {
 
 expect(outcome.path).toEqual(["company", "useCase", "shopify", "invite", "done"]);
 ```
+
+- A step counts as unanswered only when its answers are `undefined`. If your UI treats `""`, `[]` or `false` as empty, leave such steps out when building answers, so the status is `"unanswered"` rather than `"invalid"`.
+- Answers for unknown steps or fields throw, since answers built with dynamic keys typecheck loosely and a typo would otherwise be ignored.
+- `runSync` is the synchronous version.
 
 ## Analysis
 
@@ -111,7 +145,7 @@ analyze(flow);
 //  { kind: "cannot-finish", step: "c" }]       // no route to a terminal step
 ```
 
-Analysis is structural: conditions are opaque, so every conditional edge is assumed takeable.
+Analysis is structural: conditions are opaque, so every conditional edge is assumed takeable. That includes edges out of a step whose `visibleWhen` is always false. If a flow factory hides a step to lock a branch, point its transitions only at the branch it locks, so the other branch shows up as `unreachable`.
 
 ## Flows defined at runtime
 
@@ -152,8 +186,8 @@ function CvrStep() {
 }
 ```
 
-`useFlow(flow, { initialState, onChange })` is the same thing without context.
+`useFlow(flow, { initialState, onChange })` is the same thing without context. Both expose `path` and `forecast`.
 
 ## Status
 
-v0.1. Not yet: flow versioning/migration of in-flight state, live validation (`validateOn`), precise analysis of declarative conditions.
+v0.2. Not yet: flow versioning/migration of in-flight state, live validation (`validateOn`), precise analysis of declarative conditions.
