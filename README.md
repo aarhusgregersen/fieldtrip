@@ -192,6 +192,12 @@ function CvrStep() {
 - `setInputs({ squareMeters: "120" }, "sqm")` writes to any step without moving the flow, e.g. to prefill later steps from an address lookup. Without a step it writes several fields to the current step at once. Only the current step's issues are cleared, and only for the fields written. Fields from another step are a type error.
 - Writing to a step the user has already passed changes its inputs, not its values: `values` and `forecast` pick up the change once the user goes back and submits that step again.
 
+## ESM and CommonJS
+
+Both packages ship ESM and CommonJS builds with their own type declarations, so `import` and `require` both work, including TypeScript projects on `"module": "commonjs"` with node10 resolution (the default in TypeScript 5 and older, e.g. NestJS) and test runners like ts-jest.
+
+If one app ends up loading both builds (say ESM in one place, CommonJS in another), it gets two copies of the library, and `instanceof` checks against the error classes (`FlowStuckError`, `FlowStateError`, …) fail across them. Stick to one module format per app, or check `error.name` instead.
+
 ## Status
 
 v0.2. Not yet: flow versioning/migration of in-flight state, live validation (`validateOn`), precise analysis of declarative conditions.

@@ -1,6 +1,6 @@
 {
   "name": "@fieldtripjs/react",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Headless React bindings for @fieldtripjs/core.",
   "type": "module",
   "license": "MIT",
@@ -11,22 +11,32 @@
     "directory": "packages/react"
   },
   "homepage": "https://github.com/aarhusgregersen/fieldtrip#readme",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "sideEffects": false,
   "exports": {
     ".": {
       "@fieldtripjs/source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "test": "vitest run --typecheck",
     "typecheck": "tsc --noEmit",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "check:exports": "rm -rf .pack && pnpm pack --pack-destination .pack > /dev/null && attw .pack/*.tgz && publint run .pack/*.tgz && rm -rf .pack"
   },
   "peerDependencies": {
     "react": ">=18"
@@ -49,8 +59,14 @@
     "access": "public",
     "exports": {
       ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
+        "import": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        },
+        "require": {
+          "types": "./dist/cjs/index.d.ts",
+          "default": "./dist/cjs/index.js"
+        }
       }
     }
   },
