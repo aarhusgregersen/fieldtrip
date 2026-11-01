@@ -194,7 +194,7 @@ function CvrStep() {
 
 ## ESM and CommonJS
 
-Both packages ship ESM and CommonJS builds with their own type declarations, so `import` and `require` both work, including TypeScript projects on `"module": "commonjs"` with the default (node10) resolution and test runners like ts-jest.
+Both packages ship ESM and CommonJS builds with their own type declarations, so `import` and `require` both work, including TypeScript projects on `"module": "commonjs"` with node10 resolution (the default in TypeScript 5 and older, e.g. NestJS) and test runners like ts-jest.
 
 If one app ends up loading both builds (say ESM in one place, CommonJS in another), it gets two copies of the library, and `instanceof` checks against the error classes (`FlowStuckError`, `FlowStateError`, …) fail across them. Stick to one module format per app, or check `error.name` instead.
 

@@ -12,6 +12,7 @@
   },
   "homepage": "https://github.com/aarhusgregersen/fieldtrip#readme",
   "main": "./dist/cjs/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/cjs/index.d.ts",
   "sideEffects": false,
   "exports": {
@@ -31,11 +32,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && node -e \"require('node:fs').writeFileSync('dist/cjs/package.json', JSON.stringify({ type: 'commonjs' }))\"",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "test": "vitest run --typecheck",
     "typecheck": "tsc --noEmit",
     "prepack": "pnpm build",
-    "check:exports": "rm -rf .pack && pnpm pack --pack-destination .pack > /dev/null && attw .pack/*.tgz && publint --pack pnpm && rm -rf .pack"
+    "check:exports": "rm -rf .pack && pnpm pack --pack-destination .pack > /dev/null && attw .pack/*.tgz && publint run .pack/*.tgz && rm -rf .pack"
   },
   "peerDependencies": {
     "react": ">=18"
