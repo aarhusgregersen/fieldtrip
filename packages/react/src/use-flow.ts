@@ -5,6 +5,7 @@ import {
   type FieldIssues,
   type FieldName,
   type FlowState,
+  FlowAsyncError,
   type FlowValues,
   forecast as forecastOf,
   next as nextState,
@@ -12,7 +13,9 @@ import {
   result,
   setInputs,
   start,
+  type StepInputs,
   type StepName,
+  validateStepSync,
   visibleFields as visibleFieldsOf,
 } from "@fieldtripjs/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,6 +33,11 @@ export interface FieldProps<N extends string = string> {
   readonly onChange: (value: unknown) => void;
 }
 
+export interface SetFlowInputs<FL extends AnyFlow> {
+  (inputs: AnyStepInputs<FL>): void;
+  <K extends StepName<FL>>(inputs: NoInfer<Partial<StepInputs<FL, K>>>, step: K): void;
+}
+
 export interface FlowController<FL extends AnyFlow> {
   readonly state: FlowState<FL>;
   readonly step: StepName<FL>;
@@ -42,7 +50,9 @@ export interface FlowController<FL extends AnyFlow> {
   readonly isComplete: boolean;
   readonly isPending: boolean;
   readonly canGoBack: boolean;
+  readonly canAdvance: boolean;
   readonly setInput: (name: FieldName<FL>, value: unknown) => void;
+  readonly setInputs: SetFlowInputs<FL>;
   readonly field: <N extends FieldName<FL>>(name: N) => FieldProps<N>;
   readonly next: () => Promise<boolean>;
   readonly back: () => void;
@@ -66,12 +76,19 @@ export function useFlow<FL extends AnyFlow>(flow: FL, options: UseFlowOptions<FL
     onChange.current?.(next);
   }, []);
 
-  const setInput = useCallback(
-    (name: FieldName<FL>, value: unknown) => {
-      commit(setInputs(flow, latest.current, { [name]: value } as AnyStepInputs<FL>));
-      setIssues(({ [name]: _cleared, ...rest }) => rest);
+  const setStepInputs = useCallback(
+    (inputs: Record<string, unknown>, step: StepName<FL> = latest.current.current) => {
+      const current = latest.current;
+      commit(setInputs(flow, current, inputs as Partial<StepInputs<FL, typeof step>>, step));
+      if (step !== current.current) return;
+      setIssues((issues) => Object.fromEntries(Object.entries(issues).filter(([name]) => !(name in inputs))));
     },
     [flow, commit],
+  ) as SetFlowInputs<FL>;
+
+  const setInput = useCallback(
+    (name: FieldName<FL>, value: unknown) => setStepInputs({ [name]: value } as AnyStepInputs<FL>),
+    [setStepInputs],
   );
 
   const next = useCallback(async () => {
@@ -106,6 +123,15 @@ export function useFlow<FL extends AnyFlow>(flow: FL, options: UseFlowOptions<FL
   const inputs = state.inputs[state.current] ?? {};
   const visibleFields = useMemo(() => visibleFieldsOf(flow, state) as FieldName<FL>[], [flow, state]);
   const forecast = useMemo(() => forecastOf(flow, state), [flow, state]);
+  const canAdvance = useMemo(() => {
+    try {
+      return validateStepSync(flow, state).ok;
+    } catch (error) {
+      // An async schema can't be checked during render; next() decides.
+      if (error instanceof FlowAsyncError) return true;
+      throw error;
+    }
+  }, [flow, state]);
 
   const field = useCallback(
     <N extends FieldName<FL>>(name: N): FieldProps<N> => ({
@@ -131,12 +157,29 @@ export function useFlow<FL extends AnyFlow>(flow: FL, options: UseFlowOptions<FL
       isComplete: state.status === "complete",
       isPending,
       canGoBack: state.history.length > 0 || state.status === "complete",
+      canAdvance,
       setInput,
+      setInputs: setStepInputs,
       field,
       next,
       back,
       reset,
     }),
-    [flow, state, forecast, inputs, issues, visibleFields, isPending, setInput, field, next, back, reset],
+    [
+      flow,
+      state,
+      forecast,
+      inputs,
+      issues,
+      visibleFields,
+      isPending,
+      canAdvance,
+      setInput,
+      setStepInputs,
+      field,
+      next,
+      back,
+      reset,
+    ],
   );
 }

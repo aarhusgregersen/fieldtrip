@@ -188,6 +188,10 @@ function CvrStep() {
 
 `useFlow(flow, { initialState, onChange })` is the same thing without context. Both expose `path` and `forecast`.
 
+- `canAdvance` is whether the current step validates right now, e.g. to disable a "Next" button. It doesn't touch `issues`: those still appear only after `next()`, so the user sees no errors before trying. A field whose schema turns async counts as passing, and `next()` decides.
+- `setInputs({ squareMeters: "120" }, "sqm")` writes to any step without moving the flow, e.g. to prefill later steps from an address lookup. Without a step it writes several fields to the current step at once. Only the current step's issues are cleared, and only for the fields written. Fields from another step are a type error.
+- Writing to a step the user has already passed changes its inputs, not its values: `values` and `forecast` pick up the change once the user goes back and submits that step again.
+
 ## Status
 
 v0.2. Not yet: flow versioning/migration of in-flight state, live validation (`validateOn`), precise analysis of declarative conditions.
