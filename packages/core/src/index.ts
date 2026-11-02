@@ -49,13 +49,18 @@ export { analyze, edges, paths, terminals, type Diagnostic, type Edge } from "./
 export { run, runSync, type Answers, type RunResult } from "./run.js";
 export type { StandardSchemaV1 } from "./standard-schema.js";
 export {
+  checkDefinition,
   fromDefinition,
   matches,
   matchesAll,
+  operators,
   type ConditionDefinition,
+  type DefinitionIssue,
+  type DefinitionIssueKind,
   type FlowDefinition,
   type FromDefinitionOptions,
   type Operator,
   type StepDefinition,
   type TransitionDefinition,
 } from "./definition.js";
+export { definitionJsonSchema, type JsonSchema } from "./json-schema.js";

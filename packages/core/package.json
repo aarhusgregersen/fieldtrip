@@ -39,6 +39,7 @@
     "check:exports": "rm -rf .pack && pnpm pack --pack-destination .pack > /dev/null && attw .pack/*.tgz && publint run .pack/*.tgz && rm -rf .pack"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3",
     "zod": "^4.6.5"

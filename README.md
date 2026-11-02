@@ -172,6 +172,34 @@ Definitions support the same visibility rules as data: `visibleWhen: [conditions
 
 Operators: `equals`, `notEquals`, `contains`, `greaterThan`, `lessThan`, `isChecked`, `isNotChecked`, `isEmpty`, `isNotEmpty`. Conditions in one transition are ANDed; OR is separate transitions. Comparisons never coerce — that's the schema's job.
 
+### Checking a definition
+
+`fromDefinition` throws on the first problem. `checkDefinition` collects all of them, each with its location, and adds the analysis — for a form builder showing errors next to what caused them, or an LLM writing definitions:
+
+```ts
+checkDefinition(definition, { schema: (field) => toZod(field) });
+// [{ severity: "error", kind: "unknown-field", path: ["steps", "customer", "next", 0, "when", 0, "field"],
+//    message: 'Condition on step "customer" refers to unknown field "customer.knd"' },
+//  { severity: "warning", kind: "no-fallback", path: ["steps", "vat", "next"], message: "..." }]
+```
+
+- **Errors** are what `fromDefinition` rejects: unknown steps and fields, and fields your `schema` mapper throws on.
+- **Warnings** compile but probably don't do what was meant: the analysis above, unknown operators, and comparisons that can never match (`greaterThan` against `"10"`).
+- The analysis is skipped while the start step or a transition target doesn't exist.
+
+`definitionJsonSchema(fieldSchema)` describes the definition format as JSON Schema, with your field types plugged in. Use it as a tool's input schema, to validate input before `checkDefinition`, or to tell an LLM what to produce. Steps and fields are maps keyed by name, which strict structured-output modes don't accept, so validate the output rather than relying on the model to follow it.
+
+Together they make a loop:
+
+```ts
+let definition = await llm.generate({ prompt, schema: definitionJsonSchema(fieldSchema) });
+for (let attempt = 0; attempt < 3; attempt++) {
+  const issues = checkDefinition(definition, { schema });
+  if (issues.length === 0) break;
+  definition = await llm.generate({ prompt, previous: definition, fix: issues });
+}
+```
+
 ## React
 
 `@fieldtripjs/react` is headless: state and navigation, your components.
