@@ -18,8 +18,10 @@ export interface Conditional {
 
 // Marks a field that can be hidden, so its value is typed as possibly missing.
 // Needed because TS can't infer which keys a map of callbacks covers.
-export function conditional<S extends StandardSchemaV1>(schema: S): S & Conditional {
-  return { "~standard": schema["~standard"], "~conditional": true } as S & Conditional;
+export function conditional<S extends StandardSchemaV1>(
+  schema: S,
+): StandardSchemaV1<StandardSchemaV1.InferInput<S>, StandardSchemaV1.InferOutput<S>> & Conditional {
+  return { "~standard": schema["~standard"], "~conditional": true };
 }
 
 export function isConditional(schema: StandardSchemaV1): boolean {

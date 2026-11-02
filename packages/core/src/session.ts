@@ -57,8 +57,8 @@ export function draftValues<FL extends AnyFlow>(flow: FL, state: FlowState<FL>):
 function draftAt(flow: AnyFlow, name: string, inputs: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const draft: Record<string, unknown> = {};
   for (const [field, schema] of Object.entries(stepOf(flow, name).fields)) {
-    const parsed = schema["~standard"].validate(inputs[field]);
-    if (!(parsed instanceof Promise) && !parsed.issues) draft[field] = parsed.value;
+    const parsed = validateSync(schema, inputs[field]);
+    if (parsed && !parsed.issues) draft[field] = parsed.value;
   }
   return draft;
 }
@@ -78,6 +78,18 @@ function visibleAt(flow: AnyFlow, name: string, inputs: Readonly<Record<string, 
   });
 }
 
+const asyncSchemas = new WeakSet<StandardSchemaV1>();
+
+// Async validation may have side effects (e.g. a request), so each async schema is only called once to find out.
+function validateSync(schema: StandardSchemaV1, value: unknown): StandardSchemaV1.Result<unknown> | undefined {
+  if (asyncSchemas.has(schema)) return undefined;
+  const result = schema["~standard"].validate(value);
+  if (!(result instanceof Promise)) return result;
+  asyncSchemas.add(schema);
+  result.catch(() => {});
+  return undefined;
+}
+
 type Validation = { ok: true; values: Record<string, unknown> } | { ok: false; issues: FieldIssues };
 type Parsed = readonly (readonly [string, StandardSchemaV1.Result<unknown>])[];
 
@@ -93,8 +105,8 @@ export async function validateStep<FL extends AnyFlow>(flow: FL, state: FlowStat
 export function validateStepSync<FL extends AnyFlow>(flow: FL, state: FlowState<FL>): Validation {
   const { step, inputs, visible, earlier } = validationInput(flow, state);
   const parsed = visible.map((field) => {
-    const result = step.fields[field]!["~standard"].validate(inputs[field]);
-    if (result instanceof Promise) {
+    const result = validateSync(step.fields[field]!, inputs[field]);
+    if (!result) {
       throw new FlowAsyncError(`Field "${state.current}.${field}" has an async schema; use the async API`);
     }
     return [field, result] as const;
@@ -201,8 +213,8 @@ function parseSync(
   const step = stepOf(flow, name);
   const parsed: [string, StandardSchemaV1.Result<unknown>][] = [];
   for (const field of visibleAt(flow, name, inputs, earlier)) {
-    const result = step.fields[field]!["~standard"].validate(inputs[field]);
-    if (result instanceof Promise) return undefined;
+    const result = validateSync(step.fields[field]!, inputs[field]);
+    if (!result) return undefined;
     parsed.push([field, result]);
   }
   const validation = settle(flow, name, parsed, earlier);

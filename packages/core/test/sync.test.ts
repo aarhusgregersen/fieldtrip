@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { defineFlow, FlowAsyncError, nextSync, runSync, setInputs, start, validateStepSync } from "../src/index.js";
+import { defineFlow, FlowAsyncError, nextSync, runSync, setInputs, start, validateStepSync, visibleFields } from "../src/index.js";
 import { onboarding } from "./onboarding.js";
 
 describe("sync API", () => {
@@ -32,5 +32,20 @@ describe("sync API", () => {
 
     expect(() => validateStepSync(flow, state)).toThrow(FlowAsyncError);
     expect(() => runSync(flow, { a: { name: "x" } })).toThrow(/"a.name" has an async schema/);
+  });
+
+  it("calls an async schema only once while drafting", () => {
+    const validate = vi.fn(() => Promise.reject(new Error("network down")));
+    const flow = defineFlow({
+      start: "a",
+      steps: { a: { fields: { email: { "~standard": { version: 1, vendor: "test", validate } } } } },
+    });
+    let state = start(flow);
+    for (const email of ["a", "ab", "abc"]) {
+      state = setInputs(flow, state, { email });
+      expect(visibleFields(flow, state)).toEqual(["email"]);
+    }
+
+    expect(validate).toHaveBeenCalledTimes(1);
   });
 });

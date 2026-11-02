@@ -1,6 +1,6 @@
 {
   "name": "@fieldtripjs/core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "State machines for human input: typed, testable, analyzable multi-step flows.",
   "type": "module",
   "license": "MIT",
