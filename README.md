@@ -187,6 +187,16 @@ checkDefinition(definition, { schema: (field) => toZod(field) });
 - **Warnings** compile but probably don't do what was meant: the analysis above, unknown operators, and comparisons that can never match (`greaterThan` against `"10"`).
 - The analysis is skipped while the start step or a transition target doesn't exist.
 
+Because conditions are data, `checkDefinition` also checks them against the routes through the flow. A condition only sees answers from steps the user has already submitted on their way there; anything else is missing:
+
+| Kind | Example |
+|---|---|
+| `never-answered` | A condition on a step that comes later, or a step's `visibleWhen` reading its own fields. The answer is always missing. |
+| `maybe-unanswered` | `company.type notEquals "ngo"` on a step that people who never saw `company` also reach. `notEquals`, `isNotChecked` and `isEmpty` match a missing answer, so it is true for all of them. Also reported when the step can be skipped or the field hidden. |
+| `impossible-value` | `equals "compnay"` on a choice of `person`/`company`. The value is run through the field's schema; if the schema rejects or changes it (`z.coerce.number()` turns `"5"` into `5`), no answer can ever equal it. |
+
+`impossible-value` needs the `schema` option and runs each compared value through its field's schema once. An async schema is called too (its result is ignored), so avoid schemas with side effects there.
+
 `definitionJsonSchema(fieldSchema)` describes the definition format as JSON Schema, with your field types plugged in. Use it as a tool's input schema, to validate input before `checkDefinition`, or to tell an LLM what to produce. Steps and fields are maps keyed by name, which strict structured-output modes don't accept, so validate the output rather than relying on the model to follow it.
 
 Together they make a loop:
@@ -228,4 +238,4 @@ If one app ends up loading both builds (say ESM in one place, CommonJS in anothe
 
 ## Status
 
-v0.2. Not yet: flow versioning/migration of in-flight state, live validation (`validateOn`), precise analysis of declarative conditions.
+v0.3. Not yet: flow versioning/migration of in-flight state, live validation (`validateOn`), and using what `checkDefinition` knows about conditions to drop never-matching transitions from `analyze`.
