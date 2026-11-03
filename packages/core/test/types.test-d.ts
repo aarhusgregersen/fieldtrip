@@ -168,4 +168,9 @@ describe("types of step validation and targeted inputs", () => {
     // @ts-expect-error "shopfy" is not a step
     setInputs(onboarding, start(onboarding), {}, "shopfy");
   });
+
+  it("types conditional() as a plain standard schema", () => {
+    expectTypeOf(conditional(z.string())).not.toHaveProperty("parse");
+    expectTypeOf(conditional(z.string())).toHaveProperty("~conditional");
+  });
 });
