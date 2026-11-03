@@ -69,7 +69,7 @@ export function analyze<FL extends AnyFlow>(flow: FL): Diagnostic<FL>[] {
   return diagnostics;
 }
 
-function closure<T>(seed: readonly T[], neighbours: (node: T) => readonly T[]): Set<T> {
+export function closure<T>(seed: readonly T[], neighbours: (node: T) => readonly T[]): Set<T> {
   const seen = new Set(seed);
   const queue = [...seed];
   for (let node = queue.shift(); node !== undefined; node = queue.shift()) {

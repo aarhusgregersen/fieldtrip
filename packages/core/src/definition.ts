@@ -1,4 +1,4 @@
-import { analyze, type Diagnostic } from "./analyze.js";
+import { analyze, closure, type Diagnostic } from "./analyze.js";
 import { compileStep, type Fields, type Flow, FlowDefinitionError, type Transition, validateFlow } from "./define.js";
 import type { StandardSchemaV1 } from "./standard-schema.js";
 
@@ -57,6 +57,9 @@ export type DefinitionIssueKind =
   | "invalid-field"
   | "unknown-operator"
   | "invalid-value"
+  | "never-answered"
+  | "maybe-unanswered"
+  | "impossible-value"
   | Diagnostic["kind"];
 
 // Errors stop `fromDefinition`; warnings compile but probably don't do what was meant.
@@ -78,9 +81,15 @@ export function checkDefinition<FD>(
   definition: FlowDefinition<FD>,
   options: Partial<FromDefinitionOptions<FD>> = {},
 ): DefinitionIssue[] {
-  const issues = [...structuralIssues(definition), ...(options.schema ? fieldIssues(definition, options.schema) : [])];
+  const fields = options.schema ? compileFields(definition, options.schema) : { issues: [], schemas: {} };
+  const issues = [...structuralIssues(definition), ...fields.issues];
   const compilable = !issues.some((i) => i.kind === "unknown-start" || i.kind === "unknown-target");
-  return compilable ? [...issues, ...analysisIssues(definition, compile(definition, () => unvalidated))] : issues;
+  if (!compilable) return issues;
+  return [
+    ...issues,
+    ...analysisIssues(definition, compile(definition, () => unvalidated)),
+    ...answerIssues(definition, fields.schemas),
+  ];
 }
 
 function compile<FD>(definition: FlowDefinition<FD>, schema: FromDefinitionOptions<FD>["schema"]): Flow {
@@ -241,18 +250,26 @@ function conditionIssues<FD>(
   return issues;
 }
 
-function fieldIssues<FD>(definition: FlowDefinition<FD>, schema: FromDefinitionOptions<FD>["schema"]): DefinitionIssue[] {
-  return Object.entries(definition.steps).flatMap(([step, s]) =>
-    Object.entries(s.fields ?? {}).flatMap(([field, fd]) => {
+type Schemas = Readonly<Record<string, Readonly<Record<string, StandardSchemaV1>>>>;
+
+function compileFields<FD>(
+  definition: FlowDefinition<FD>,
+  schema: FromDefinitionOptions<FD>["schema"],
+): { issues: DefinitionIssue[]; schemas: Schemas } {
+  const issues: DefinitionIssue[] = [];
+  const schemas: Record<string, Record<string, StandardSchemaV1>> = {};
+  for (const [step, s] of Object.entries(definition.steps)) {
+    schemas[step] = {};
+    for (const [field, fd] of Object.entries(s.fields ?? {})) {
       try {
-        schema(fd, { step, field });
-        return [];
+        schemas[step][field] = schema(fd, { step, field });
       } catch (e) {
         const reason = e instanceof Error ? e.message : String(e);
-        return [error("invalid-field", ["steps", step, "fields", field], `Field "${step}.${field}" is invalid: ${reason}`)];
+        issues.push(error("invalid-field", ["steps", step, "fields", field], `Field "${step}.${field}" is invalid: ${reason}`));
       }
-    }),
-  );
+    }
+  }
+  return { issues, schemas };
 }
 
 function analysisIssues<FD>(definition: FlowDefinition<FD>, flow: Flow): DefinitionIssue[] {
@@ -284,4 +301,140 @@ function analysisIssues<FD>(definition: FlowDefinition<FD>, flow: Flow): Definit
       }
     }
   });
+}
+
+// Where a condition sits decides which answers exist: transitions also see their own step, visibility rules don't.
+type Place = "transition" | "visibleWhen" | "fieldsVisibleWhen";
+
+function answerIssues<FD>(definition: FlowDefinition<FD>, schemas: Schemas): DefinitionIssue[] {
+  const graph = graphOf(definition);
+  const issues: DefinitionIssue[] = [];
+  for (const [name, step] of Object.entries(definition.steps)) {
+    if (!graph.reachable.has(name)) continue;
+    const at = ["steps", name];
+    const check = (place: Place, list: readonly ConditionDefinition[] | undefined, path: DefinitionIssue["path"]) =>
+      list?.forEach((c, i) => issues.push(...answerIssuesOf(definition, schemas, graph, name, place, c, [...path, i])));
+
+    if (typeof step.next !== "string") step.next?.forEach((t, i) => check("transition", t.when, [...at, "next", i, "when"]));
+    check("visibleWhen", step.visibleWhen, [...at, "visibleWhen"]);
+    for (const [field, list] of Object.entries(step.fieldsVisibleWhen ?? {})) {
+      check("fieldsVisibleWhen", list, [...at, "fieldsVisibleWhen", field]);
+    }
+  }
+  return issues;
+}
+
+function answerIssuesOf<FD>(
+  definition: FlowDefinition<FD>,
+  schemas: Schemas,
+  graph: Graph,
+  step: string,
+  place: Place,
+  c: ConditionDefinition,
+  path: DefinitionIssue["path"],
+): DefinitionIssue[] {
+  const source = definition.steps[c.step];
+  if (!source || !has(definition.steps, c.step) || !has(source.fields, c.field)) return [];
+
+  const answer = `"${c.step}.${c.field}"`;
+  const own = c.step === step && place !== "visibleWhen";
+  if (!own && !graph.answeredBefore(c.step, step)) {
+    const outcome = matches(c, undefined) ? "always matches" : "never matches";
+    return [
+      warning(
+        "never-answered",
+        path,
+        `Step "${c.step}" is never answered before step "${step}", so ${answer} is always missing and ${c.op} ${outcome}`,
+      ),
+    ];
+  }
+
+  const issues: DefinitionIssue[] = [];
+  const missing = whyMissing(source, graph, step, place, c, own);
+  if (missing && matches(c, undefined)) {
+    issues.push(warning("maybe-unanswered", path, `${missing}, and ${c.op} matches a missing answer`));
+  }
+
+  const schema = schemas[c.step]?.[c.field];
+  if (schema && (c.op === "equals" || c.op === "notEquals") && c.value !== undefined && !canBeAnswer(schema, c.value)) {
+    const outcome = c.op === "equals" ? "never matches" : "always matches";
+    issues.push(
+      warning("impossible-value", [...path, "value"], `${JSON.stringify(c.value)} is never an answer to ${answer}, so ${c.op} ${outcome}`),
+    );
+  }
+  return issues;
+}
+
+function whyMissing<FD>(
+  source: StepDefinition<FD>,
+  graph: Graph,
+  step: string,
+  place: Place,
+  c: ConditionDefinition,
+  own: boolean,
+): string | undefined {
+  // While typing, a step's own fields are missing until they parse; reacting to that is the point.
+  if (own && place === "fieldsVisibleWhen") return undefined;
+  if (has(source.fieldsVisibleWhen, c.field)) return `"${c.step}.${c.field}" can be hidden`;
+  if (own) return undefined;
+  if (source.visibleWhen?.length) return `Step "${c.step}" is skipped when its visibleWhen doesn't hold`;
+  if (!graph.dominates(c.step, step)) return `Some routes reach step "${step}" without passing step "${c.step}"`;
+  return undefined;
+}
+
+// Answers are parsed values, so a value the schema rejects or transforms can never equal one.
+function canBeAnswer(schema: StandardSchemaV1, value: unknown): boolean {
+  const result = schema["~standard"].validate(value);
+  if (result instanceof Promise) {
+    result.catch(() => {});
+    return true;
+  }
+  return !result.issues && isEqual(result.value, value);
+}
+
+interface Graph {
+  readonly reachable: ReadonlySet<string>;
+  readonly answeredBefore: (step: string, at: string) => boolean;
+  readonly dominates: (step: string, at: string) => boolean;
+}
+
+function graphOf<FD>(definition: FlowDefinition<FD>): Graph {
+  const successors = (s: string) => transitionsOf(definition.steps[s]!).map((t) => t.to);
+  const reachable = closure([definition.start], successors);
+  const dominators = dominatorsOf(definition.start, reachable, successors);
+  const after = new Map<string, Set<string>>();
+  const strictlyAfter = (s: string) => {
+    if (!after.has(s)) after.set(s, closure(successors(s), successors));
+    return after.get(s)!;
+  };
+  return {
+    reachable,
+    answeredBefore: (step, at) => reachable.has(step) && strictlyAfter(step).has(at),
+    dominates: (step, at) => step !== at && (dominators.get(at)?.has(step) ?? false),
+  };
+}
+
+// A step dominates another when every route from the start to the other passes through it.
+function dominatorsOf(
+  start: string,
+  nodes: ReadonlySet<string>,
+  successors: (s: string) => readonly string[],
+): Map<string, Set<string>> {
+  const predecessors = new Map([...nodes].map((n) => [n, [] as string[]]));
+  for (const n of nodes) for (const s of successors(n)) predecessors.get(s)?.push(n);
+
+  const dominators = new Map([...nodes].map((n) => [n, n === start ? new Set([start]) : new Set(nodes)]));
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const n of nodes) {
+      if (n === start) continue;
+      const [first, ...rest] = predecessors.get(n)!.map((p) => dominators.get(p)!);
+      const next = new Set([n, ...[...first!].filter((d) => rest.every((set) => set.has(d)))]);
+      if (next.size !== dominators.get(n)!.size) {
+        dominators.set(n, next);
+        changed = true;
+      }
+    }
+  }
+  return dominators;
 }

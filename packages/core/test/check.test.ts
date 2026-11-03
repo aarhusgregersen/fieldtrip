@@ -165,3 +165,114 @@ describe("definitionJsonSchema", () => {
     expect(validate({ start: "a", steps: {}, extra: true })).toBe(false);
   });
 });
+
+describe("checkDefinition on conditions", () => {
+  const kinds = (definition: FlowDefinition<FieldDef>) =>
+    checkDefinition(definition, { schema }).map(({ kind, path, message }) => ({ kind, path, message }));
+
+  it("warns about answers from steps that can't have been answered yet", () => {
+    const definition: FlowDefinition<FieldDef> = {
+      start: "a",
+      steps: {
+        a: { next: [{ to: "b", when: [{ step: "b", field: "x", op: "equals", value: "yes" }] }, { to: "b" }] },
+        b: {
+          fields: { x: { type: "text" } },
+          visibleWhen: [{ step: "b", field: "x", op: "isEmpty" }],
+          next: "done",
+        },
+        done: {},
+      },
+    };
+
+    expect(kinds(definition)).toEqual([
+      {
+        kind: "never-answered",
+        path: ["steps", "a", "next", 0, "when", 0],
+        message: 'Step "b" is never answered before step "a", so "b.x" is always missing and equals never matches',
+      },
+      {
+        kind: "never-answered",
+        path: ["steps", "b", "visibleWhen", 0],
+        message: 'Step "b" is never answered before step "b", so "b.x" is always missing and isEmpty always matches',
+      },
+    ]);
+  });
+
+  it("warns when a branch skips the step and the operator matches a missing answer", () => {
+    const at = (op: "notEquals" | "equals"): FlowDefinition<FieldDef> => ({
+      start: "kind",
+      steps: {
+        kind: {
+          fields: { kind: { type: "choice", options: ["person", "company"] } },
+          next: [{ to: "company", when: [{ step: "kind", field: "kind", op: "equals", value: "company" }] }, { to: "person" }],
+        },
+        company: { fields: { type: { type: "choice", options: ["ngo", "ltd"] } }, next: "summary" },
+        person: { next: "summary" },
+        summary: { next: [{ to: "done", when: [{ step: "company", field: "type", op, value: "ngo" }] }, { to: "done" }] },
+        done: {},
+      },
+    });
+
+    expect(kinds(at("notEquals"))).toEqual([
+      {
+        kind: "maybe-unanswered",
+        path: ["steps", "summary", "next", 0, "when", 0],
+        message: 'Some routes reach step "summary" without passing step "company", and notEquals matches a missing answer',
+      },
+    ]);
+    expect(kinds(at("equals"))).toEqual([]);
+  });
+
+  it("treats skipped steps and hidden fields as possibly missing", () => {
+    const definition: FlowDefinition<FieldDef> = {
+      start: "a",
+      steps: {
+        a: {
+          fields: { x: { type: "text" }, y: { type: "text" } },
+          fieldsVisibleWhen: { y: [{ step: "a", field: "x", op: "isEmpty" }] },
+          next: [{ to: "b", when: [{ step: "a", field: "y", op: "isEmpty" }] }, { to: "b" }],
+        },
+        b: { fields: { z: { type: "text" } }, visibleWhen: [{ step: "a", field: "x", op: "isNotEmpty" }], next: "c" },
+        c: { next: [{ to: "done", when: [{ step: "b", field: "z", op: "isEmpty" }] }, { to: "done" }] },
+        done: {},
+      },
+    };
+
+    expect(kinds(definition)).toEqual([
+      {
+        kind: "maybe-unanswered",
+        path: ["steps", "a", "next", 0, "when", 0],
+        message: '"a.y" can be hidden, and isEmpty matches a missing answer',
+      },
+      {
+        kind: "maybe-unanswered",
+        path: ["steps", "c", "next", 0, "when", 0],
+        message: 'Step "b" is skipped when its visibleWhen doesn\'t hold, and isEmpty matches a missing answer',
+      },
+    ]);
+  });
+
+  it("checks comparison values against the field's schema", () => {
+    const at = (op: "equals" | "notEquals", field: "kind" | "size", value: unknown): FlowDefinition<FieldDef> => ({
+      ...valid,
+      steps: {
+        ...valid.steps,
+        customer: { ...valid.steps.customer!, next: [{ to: "vat", when: [{ step: "customer", field, op, value }] }, { to: "done" }] },
+      },
+    });
+
+    expect(kinds(at("equals", "kind", "compnay"))).toEqual([
+      {
+        kind: "impossible-value",
+        path: ["steps", "customer", "next", 0, "when", 0, "value"],
+        message: '"compnay" is never an answer to "customer.kind", so equals never matches',
+      },
+    ]);
+    expect(kinds(at("notEquals", "kind", "compnay")).map((i) => i.message)).toEqual([
+      '"compnay" is never an answer to "customer.kind", so notEquals always matches',
+    ]);
+    expect(kinds(at("equals", "size", "5")).map((i) => i.kind)).toEqual(["impossible-value"]);
+    expect(kinds(at("equals", "size", 5))).toEqual([]);
+    expect(checkDefinition(at("equals", "kind", "compnay"))).toEqual([]);
+  });
+});
